@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2020"],
+    "types": ["node"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@scrawn/core": ["./packages/scrawn/src/index.ts"],
+      "@scrawn/sdk_call": ["./packages/@scrawn/sdk_call/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*", "examples/**/*"],
+  "exclude": ["node_modules", "**/dist", "**/node_modules"]
+}
