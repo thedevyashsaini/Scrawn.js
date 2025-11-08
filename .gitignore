@@ -8,6 +8,7 @@ build/
 out/
 bin/
 obj/
+tsconfig.tsbuildinfo
 
 # IDE and editor files
 .vscode/

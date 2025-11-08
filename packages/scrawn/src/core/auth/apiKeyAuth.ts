@@ -1,5 +1,8 @@
 import { AuthBase } from './baseAuth.js';
 import type { Scrawn } from '../scrawn.js';
+import { ScrawnLogger } from '../../utils/logger.js';
+
+const log = new ScrawnLogger('Auth');
 
 /**
  * API key format: sk_ followed by 16 alphanumeric characters
@@ -20,6 +23,7 @@ export function isValidApiKey(key: string): key is ApiKeyFormat {
  */
 export function validateApiKey(key: string): ApiKeyFormat {
   if (!isValidApiKey(key)) {
+    log.error(`Invalid API key format: "${key}".`);
     throw new Error(
       `Invalid API key format. Expected format: sk_<16 alphanumeric characters>. Got: ${key.substring(0, 10)}...`
     );

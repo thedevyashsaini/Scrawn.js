@@ -2,6 +2,8 @@ import type { AuthBase } from './auth/baseAuth.js';
 import type { SdkCallEventPayload } from './types/event.js';
 import type { AuthRegistry, AuthMethodName, AllCredentials } from './types/auth.js';
 import { ApiKeyAuth } from './auth/apiKeyAuth.js';
+import { ScrawnLogger } from '../utils/logger.js';
+const log = new ScrawnLogger('Scrawn');
 
 /**
  * Main SDK class for Scrawn billing infrastructure.
@@ -47,22 +49,13 @@ export class Scrawn {
    * ```
    */
   constructor(config: { apiKey: AllCredentials['apiKey'] }) {
-    this.apiKey = config.apiKey;
-  }
-
-  /**
-   * Initialize the SDK with authentication.
-   * Must be called after construction.
-   * 
-   * @example
-   * ```typescript
-   * const scrawn = new Scrawn({ apiKey: 'sk_test_...' });
-   * await scrawn.init();
-   * ```
-   */
-  async init() {
-    this.registerAuthMethod('api', new ApiKeyAuth(this.apiKey));
-    return this;
+    try {
+      this.apiKey = config.apiKey;
+      this.registerAuthMethod('api', new ApiKeyAuth(this.apiKey));
+    } catch (error) {
+      log.error('Failed to initialize Scrawn SDK');
+      throw error;
+    }
   }
 
   /**
@@ -142,6 +135,7 @@ export class Scrawn {
    * ```
    */
   async sdkCallEventConsumer(payload: SdkCallEventPayload): Promise<void> {
+    // TODO: input validation using zod schema to be added here
     return this.consumeEvent(payload, 'api', 'SERVERLESS_FUNCTION_CALL'); // TODO: change this event type when jaydeep changes it in backend
   }
 
@@ -177,7 +171,7 @@ export class Scrawn {
     const creds = await this.getCredsFor(authMethodName);
     
     // Ingest the event here
-    console.log(`Ingesting event (type: ${eventType}) with creds:`, creds, 'payload:', payload);
+    log.info(`Ingesting event (type: ${eventType}) with creds: ${JSON.stringify(creds)}, payload: ${JSON.stringify(payload)}`);
     // TODO: Actual API call to Scrawn backend will go here
 
     if (auth.postRun) await auth.postRun();
