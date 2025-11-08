@@ -38,35 +38,14 @@ await scrawn.sdkCallEventConsumer({
 ```bash
 # Install dependencies
 npm install
-
-# Build
-npm run build
+npm run clean
 ```
 
 ### Building
 
 ```bash
-# Build core package
-cd packages/scrawn
 npm run build
-```
-
-### Adding New Event Types
-
-Add new event consumer methods directly to the `Scrawn` class in `packages/scrawn/src/core/scrawn.ts`:
-
-```typescript
-// 1. Define the type in types/event.ts
-export type MyEventPayload = {
-  userId: string;
-  customField: string;
-}
-
-// 2. Add the method to Scrawn class
-async myEventConsumer(payload: MyEventPayload): Promise<void> {
-  return this.consumeEvent(payload, 'api', 'MY_EVENT_TYPE');
-}
-```
+``
 
 ## License
 
