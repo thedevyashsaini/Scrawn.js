@@ -2,6 +2,39 @@ import { AuthBase } from './baseAuth.js';
 import type { Scrawn } from '../scrawn.js';
 
 /**
+ * API key format: sk_ followed by 16 alphanumeric characters
+ * @example 'sk_abc123def456ghi7'
+ */
+export type ApiKeyFormat = `sk_${string}`;
+
+/**
+ * Type guard to validate API key format
+ */
+export function isValidApiKey(key: string): key is ApiKeyFormat {
+  return /^sk_[a-zA-Z0-9]{16}$/.test(key);
+}
+
+/**
+ * Validates and returns a properly typed API key
+ * @throws Error if the API key format is invalid
+ */
+export function validateApiKey(key: string): ApiKeyFormat {
+  if (!isValidApiKey(key)) {
+    throw new Error(
+      `Invalid API key format. Expected format: sk_<16 alphanumeric characters>. Got: ${key.substring(0, 10)}...`
+    );
+  }
+  return key;
+}
+
+/**
+ * Credentials structure for API key authentication.
+ */
+export type ApiKeyAuthCreds = {
+  apiKey: ApiKeyFormat;
+};
+
+/**
  * Simple API key authentication method.
  * 
  * Provides authentication using a static API key.
@@ -13,17 +46,22 @@ import type { Scrawn } from '../scrawn.js';
  * scrawn.registerAuthMethod('api', auth);
  * ```
  */
-export class ApiKeyAuth extends AuthBase {
+export class ApiKeyAuth extends AuthBase<ApiKeyAuthCreds> {
   /** Authentication method identifier */
-  name = 'api';
+  name = 'api' as const;
+  
+  /** Validated API key */
+  private validatedKey: ApiKeyFormat;
   
   /**
    * Creates a new API key authentication instance.
    * 
-   * @param apiKey - Your Scrawn API key
+   * @param apiKey - Your Scrawn API key (format: sk_<16 alphanumeric chars>)
+   * @throws Error if API key format is invalid
    */
-  constructor(private apiKey: string) { 
-    super(); 
+  constructor(apiKey: string) { 
+    super();
+    this.validatedKey = validateApiKey(apiKey);
   }
 
   /**
@@ -45,10 +83,10 @@ export class ApiKeyAuth extends AuthBase {
    * @example
    * ```typescript
    * const creds = await auth.getCreds();
-   * // { apiKey: 'sk_test_...' }
+   * // { apiKey: 'sk_abc123def456ghi7' }
    * ```
    */
-  async getCreds() {
-    return { apiKey: this.apiKey };
+  async getCreds(): Promise<ApiKeyAuthCreds> {
+    return { apiKey: this.validatedKey };
   }
 }

@@ -1,40 +1,34 @@
 # Scrawn SDK
 
-A modular TypeScript SDK for billing infrastructure.
+A TypeScript SDK for billing infrastructure.
 
 ## Structure
 
 ```
 packages/
-  scrawn/              # Core SDK package
-  @scrawn/
-    sdk_call/          # SDK call tracking plugin
+  scrawn/              # Core SDK package with all functionality
 ```
 
 ## Installation
 
 ```bash
-npm install scrawn @scrawn/sdk_call
+npm install @scrawn/core
 ```
 
 ## Quick Start
 
 ```typescript
-import { Scrawn } from '@scrawn/core';
-import { SdkCallEvent, type sdkCallEventPayload } from '@scrawn/sdk_call';
+import { Scrawn, type SdkCallEventPayload } from '@scrawn/core';
 
 // Initialize
-const scrawn = new Scrawn({ apiKey: process.env.SCRAWN_KEY || 'test-api-key' });
-await scrawn.init({ scope: ['sdk_call'] });
-
-// Register plugin
-const sdkEvent = new SdkCallEvent(scrawn);
+const scrawn = new Scrawn({ apiKey: process.env.SCRAWN_KEY });
+await scrawn.init();
 
 // Track SDK usage
-await sdkEvent.consume({ 
+await scrawn.sdkCallEventConsumer({ 
   userId: 'u123', 
-  usage: 3,
-} as sdkCallEventPayload);
+  debitAmount: 3,
+});
 ```
 
 ## Development
@@ -45,30 +39,34 @@ await sdkEvent.consume({
 # Install dependencies
 npm install
 
-# Build all packages
+# Build
 npm run build
 ```
 
-### Building Individual Packages
+### Building
 
 ```bash
 # Build core package
 cd packages/scrawn
 npm run build
-
-# Build plugin
-cd packages/@scrawn/sdk_call
-npm run build
 ```
 
-### Creating New Plugins
+### Adding New Event Types
 
-1. Create a new package under `packages/@scrawn/`
-2. Implement an event handler class with:
-   - `name` property
-   - `authType` property
-3. Export a `register(scrawn)` function
-4. Add the plugin as a peer dependency to `@scrawn/core`
+Add new event consumer methods directly to the `Scrawn` class in `packages/scrawn/src/core/scrawn.ts`:
+
+```typescript
+// 1. Define the type in types/event.ts
+export type MyEventPayload = {
+  userId: string;
+  customField: string;
+}
+
+// 2. Add the method to Scrawn class
+async myEventConsumer(payload: MyEventPayload): Promise<void> {
+  return this.consumeEvent(payload, 'api', 'MY_EVENT_TYPE');
+}
+```
 
 ## License
 

@@ -6,22 +6,26 @@ import type { Scrawn } from '../scrawn.js';
  * All authentication implementations must extend this class and implement the required methods.
  * Auth methods are responsible for managing and providing credentials for API requests.
  * 
+ * @template TCreds - The type of credentials this auth method returns
+ * 
  * @example
  * ```typescript
- * export class MyAuth extends AuthBase {
+ * type MyAuthCreds = { token: string };
+ * 
+ * export class MyAuth extends AuthBase<MyAuthCreds> {
  *   name = 'my_auth';
  *   
  *   async init(scrawn: Scrawn) {
  *     // Setup logic here
  *   }
  *   
- *   async getCreds() {
+ *   async getCreds(): Promise<MyAuthCreds> {
  *     return { token: 'my_token' };
  *   }
  * }
  * ```
  */
-export abstract class AuthBase {
+export abstract class AuthBase<TCreds = unknown> {
   /**
    * Unique identifier for this authentication method.
    * Used to register and reference the auth method (e.g., 'api', 'oauth').
@@ -37,7 +41,7 @@ export abstract class AuthBase {
    * @param scrawn - The Scrawn SDK instance
    * @returns A promise that resolves when initialization is complete
    */
-  abstract init(scrawn: Scrawn): Promise<void> | Promise<any>;
+  abstract init(scrawn: Scrawn): Promise<void>;
   
   /**
    * Retrieve the current credentials for this authentication method.
@@ -49,12 +53,12 @@ export abstract class AuthBase {
    * 
    * @example
    * ```typescript
-   * async getCreds() {
+   * async getCreds(): Promise<MyAuthCreds> {
    *   return { apiKey: this.apiKey };
    * }
    * ```
    */
-  abstract getCreds(): Promise<any>;
+  abstract getCreds(): Promise<TCreds>;
   
   /**
    * Optional hook that runs before each event is processed.
@@ -72,4 +76,21 @@ export abstract class AuthBase {
    * ```
    */
   preRun?(): Promise<void>;
+
+  /**
+    * Optional hook that runs after each event is processed.
+    * 
+    * Use this for cleanup operations or logging that should happen
+    * after every request completes.
+    * 
+    * @returns A promise that resolves when the post-run hook completes
+    * 
+    * @example
+    * ```typescript
+    * async postRun() {
+    *   await this.logRequestMetrics();
+    * }
+    * ```
+    */
+    postRun?(): Promise<void>;
 }

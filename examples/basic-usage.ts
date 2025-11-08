@@ -1,21 +1,17 @@
-import { Scrawn } from '@scrawn/core';
-import { SdkCallEvent, type sdkCallEventPayload } from '@scrawn/sdk_call';
+import { Scrawn, type SdkCallEventPayload } from '@scrawn/core';
 
 async function main() {
-  const scrawn = new Scrawn({ apiKey: process.env.SCRAWN_KEY || 'test-api-key' });
-  await scrawn.init({ scope: ['sdk_call'] });
+  const scrawn = await new Scrawn({ apiKey: (process.env.SCRAWN_KEY ?? 'sk_test1234567890ab') as `sk_${string}` }).init();
   
-  const sdkEvent = new SdkCallEvent(scrawn);
-  
-  await sdkEvent.consume({ 
+  await scrawn.sdkCallEventConsumer({ 
     userId: 'u123', 
-    usage: 3,
-  } as sdkCallEventPayload);
+    debitAmount: 3,
+  } as SdkCallEventPayload);
   
-  await sdkEvent.consume({ 
+  await scrawn.sdkCallEventConsumer({ 
     userId: 'u456', 
-    usage: 5 
-  } as sdkCallEventPayload);
+    debitAmount: 5,
+  } as SdkCallEventPayload);
   
   console.log('✅ SDK call events consumed successfully');
 }

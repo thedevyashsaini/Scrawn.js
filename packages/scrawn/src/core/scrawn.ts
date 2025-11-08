@@ -1,40 +1,38 @@
-import { EVENT_SOURCE } from '../symbols.js';
 import type { AuthBase } from './auth/baseAuth.js';
-import type { BaseEvent } from './events/baseEvent.js';
-import { eventPayload } from './types/event.js';
+import type { SdkCallEventPayload } from './types/event.js';
+import type { AuthRegistry, AuthMethodName, AllCredentials } from './types/auth.js';
+import { ApiKeyAuth } from './auth/apiKeyAuth.js';
 
 /**
  * Main SDK class for Scrawn billing infrastructure.
  * 
- * Manages authentication methods, event handlers, and credential caching.
- * Automatically loads and registers plugins based on the configured scope.
+ * Manages authentication, event tracking, and credential caching.
+ * All event consumption methods are available directly on the SDK instance.
  * 
  * @example
  * ```typescript
  * import { Scrawn } from '@scrawn/core';
- * import { SdkCallEvent } from '@scrawn/sdk_call';
  * 
  * // Initialize SDK
  * const scrawn = new Scrawn({ apiKey: process.env.SCRAWN_KEY });
- * await scrawn.init({ scope: ['sdk_call'] });
+ * await scrawn.init();
  * 
- * // Use event handler
- * const sdkEvent = new SdkCallEvent(scrawn);
- * await sdkEvent.consume({ userId: 'u123', usage: 3 });
+ * // Track SDK calls
+ * await scrawn.sdkCallEventConsumer({ userId: 'u123', debitAmount: 3 });
  * ```
  */
 export class Scrawn {
   /** Map of authentication method names to their implementations */
-  private authMethods = new Map<string, AuthBase>();
+  private authMethods = new Map<AuthMethodName, AuthBase<AllCredentials>>();
   
-  /** Map of event names to their handler instances */
-  private eventRegistry = new Map<string, BaseEvent>();
-  
-  /** Cache of credentials keyed by auth method name for performance */
-  private credCache = new Map<string, any>(); 
+  /** 
+   * Cache of credentials keyed by auth method name for performance.
+   * Keys are restricted to registered auth method names only.
+   */
+  private credCache = new Map<AuthMethodName, AllCredentials>();
   
   /** API key used for default authentication */
-  private apiKey: string;
+  private apiKey: AllCredentials['apiKey'];
 
   /**
    * Creates a new Scrawn SDK instance.
@@ -45,79 +43,47 @@ export class Scrawn {
    * @example
    * ```typescript
    * const scrawn = new Scrawn({ apiKey: 'sk_test_...' });
+   * await scrawn.init();
    * ```
    */
-  constructor(config: { apiKey: string }) {
+  constructor(config: { apiKey: AllCredentials['apiKey'] }) {
     this.apiKey = config.apiKey;
   }
 
   /**
-   * Initialize the SDK and auto-load plugins based on scope.
-   * 
-   * This method:
-   * 1. Registers the default API key authentication method
-   * 2. Dynamically imports and registers plugins specified in the scope
-   * 3. Each plugin's `register()` function is called to set up event handlers
-   * 
-   * @param config - Initialization configuration
-   * @param config.scope - Array of plugin names to load (e.g., ['sdk_call', 'serverless'])
-   * @returns A promise that resolves when initialization is complete
+   * Initialize the SDK with authentication.
+   * Must be called after construction.
    * 
    * @example
    * ```typescript
-   * await scrawn.init({ scope: ['sdk_call'] });
-   * // Plugins are now loaded and ready to use
+   * const scrawn = new Scrawn({ apiKey: 'sk_test_...' });
+   * await scrawn.init();
    * ```
    */
-  async init(config: { scope: string[] }) {
-    // Register default auth method
-    const { ApiKeyAuth } = await import('./auth/apiKeyAuth.js');
+  async init() {
     this.registerAuthMethod('api', new ApiKeyAuth(this.apiKey));
-
-    // Auto-load plugins based on scope
-    // Each plugin in scope gets dynamically imported and auto-registers
-    for (const pluginName of config.scope) {
-      try {
-        const plugin = await import(`@scrawn/${pluginName}`);
-        if (plugin.register) {
-          plugin.register(this); // Plugin registers its event handlers
-        }
-      } catch (err) {
-        console.warn(`Failed to load plugin @scrawn/${pluginName}:`, err);
-      }
-    }
+    return this;
   }
 
   /**
    * Register an authentication method with the SDK.
    * 
    * Auth methods handle credential management and can be shared across multiple event types.
+   * Only auth method names defined in AuthRegistry are allowed.
    * 
-   * @param name - Unique identifier for this auth method (e.g., 'api', 'oauth')
+   * @param name - Unique identifier for this auth method (must be in AuthRegistry)
    * @param auth - Instance of an AuthBase implementation
    * 
    * @example
    * ```typescript
-   * scrawn.registerAuthMethod('oauth', new OAuthAuth({ clientId: '...' }));
+   * scrawn.registerAuthMethod('api', new ApiKeyAuth('sk_test_...'));
    * ```
    */
-  registerAuthMethod(name: string, auth: AuthBase) {
-    this.authMethods.set(name, auth);
-  }
-
-  /**
-   * Register an event handler with the SDK.
-   * 
-   * Called internally by plugins during initialization.
-   * Users typically don't need to call this directly.
-   * 
-   * @param name - Unique event name (e.g., 'sdk_call')
-   * @param handler - Instance of a BaseEvent implementation
-   * 
-   * @internal
-   */
-  registerEvent(name: string, handler: BaseEvent) {
-    this.eventRegistry.set(name, handler);
+  registerAuthMethod<K extends AuthMethodName>(
+    name: K,
+    auth: AuthBase<AuthRegistry[K]>
+  ) {
+    this.authMethods.set(name, auth as AuthBase<AllCredentials>);
   }
 
   /**
@@ -125,8 +91,9 @@ export class Scrawn {
    * 
    * Credentials are cached after the first fetch for performance.
    * Subsequent calls return the cached value without re-fetching.
+   * Only auth method names defined in AuthRegistry are allowed.
    * 
-   * @param authMethodName - Name of the auth method to get credentials for
+   * @param authMethodName - Name of the auth method to get credentials for (must be in AuthRegistry)
    * @returns A promise that resolves to the credentials object
    * @throws Error if the auth method is not registered
    * 
@@ -136,10 +103,12 @@ export class Scrawn {
    * // { apiKey: 'sk_test_...' }
    * ```
    */
-  async getCredsFor(authMethodName: string): Promise<any> {
+  async getCredsFor<K extends AuthMethodName>(
+    authMethodName: K
+  ): Promise<AuthRegistry[K]> {
     // Check cache first
     if (this.credCache.has(authMethodName)) {
-      return this.credCache.get(authMethodName);
+      return this.credCache.get(authMethodName)! as AuthRegistry[K];
     }
 
     // Get fresh creds from auth method
@@ -150,35 +119,54 @@ export class Scrawn {
 
     const creds = await auth.getCreds();
     this.credCache.set(authMethodName, creds);
-    return creds;
+    return creds as AuthRegistry[K];
   }
 
   /**
-   * Internal method to consume and route an event.
+   * Track an SDK call event.
+   * 
+   * Records SDK usage to the Scrawn backend for billing tracking.
+   * The event is authenticated using the API key provided during SDK initialization.
+   * 
+   * @param payload - The SDK call data to track
+   * @param payload.userId - Unique identifier of the user making the call
+   * @param payload.debitAmount - Amount to debit from the user's account 
+   * @returns A promise that resolves when the event is tracked
+   * 
+   * @example
+   * ```typescript
+   * await scrawn.sdkCallEventConsumer({
+   *   userId: 'user_abc123',
+   *   debitAmount: 10
+   * });
+   * ```
+   */
+  async sdkCallEventConsumer(payload: SdkCallEventPayload): Promise<void> {
+    return this.consumeEvent(payload, 'api', 'SERVERLESS_FUNCTION_CALL'); // TODO: change this event type when jaydeep changes it in backend
+  }
+
+  /**
+   * Internal method to consume and process an event.
    * 
    * This method:
-   * 1. Validates the event source
-   * 2. Looks up the appropriate handler
-   * 3. Fetches/caches credentials
-   * 4. Executes any pre-run hooks
-   * 5. Processes the event
+   * 1. Validates authentication
+   * 2. Fetches/caches credentials
+   * 3. Executes any pre-run hooks
+   * 4. Processes the event
    * 
-   * Called internally by event handlers. Users should call the event's `consume()` method instead.
-   * 
-   * @param eventObj - Event payload with EVENT_SOURCE symbol
+   * @param payload - Event payload data
+   * @param authMethodName - Name of the auth method to use (must be in AuthRegistry)
+   * @param eventType - Type of event for categorization
    * @returns A promise that resolves when the event is processed
-   * @throws Error if event source is invalid or handler not found
+   * @throws Error if auth method is not registered
    * 
    * @internal
    */
-  async consume(eventObj: eventPayload) {
-    const source = eventObj[EVENT_SOURCE];
-    if (!source) throw new Error('Invalid event: missing source symbol');
-
-    const eventHandler = this.eventRegistry.get(source);
-    if (!eventHandler) throw new Error(`Unknown event source: ${source}`);
-
-    const authMethodName = eventHandler.authType;
+  private async consumeEvent<K extends AuthMethodName>(
+    payload: SdkCallEventPayload,
+    authMethodName: K,
+    eventType: string
+  ): Promise<void> {
     const auth = this.authMethods.get(authMethodName);
     if (!auth) throw new Error(`No auth registered for type ${authMethodName}`);
 
@@ -189,6 +177,9 @@ export class Scrawn {
     const creds = await this.getCredsFor(authMethodName);
     
     // Ingest the event here
-    console.log(`Ingesting event from source: ${source} with creds:`, creds);
+    console.log(`Ingesting event (type: ${eventType}) with creds:`, creds, 'payload:', payload);
+    // TODO: Actual API call to Scrawn backend will go here
+
+    if (auth.postRun) await auth.postRun();
   }
 }

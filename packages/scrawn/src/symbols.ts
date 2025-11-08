@@ -7,7 +7,7 @@
  * const eventObj = {
  *   [EVENT_SOURCE]: 'sdk_call',
  *   userId: 'u123',
- *   usage: 3
+ *   debitAmount: 3
  * };
  * ```
  */
