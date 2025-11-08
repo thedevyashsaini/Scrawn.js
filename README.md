@@ -18,7 +18,7 @@ npm install @scrawn/core
 ## Quick Start
 
 ```typescript
-import { Scrawn, type SdkCallEventPayload } from '@scrawn/core';
+import { Scrawn, type EventPayload } from '@scrawn/core';
 
 // Initialize
 const scrawn = new Scrawn({ apiKey: process.env.SCRAWN_KEY });

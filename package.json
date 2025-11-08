@@ -5,7 +5,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "packages/@scrawn/*"
+    "examples"
   ],
   "scripts": {
     "build": "npm run build --workspaces",

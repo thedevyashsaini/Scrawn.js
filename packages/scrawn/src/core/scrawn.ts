@@ -1,8 +1,15 @@
 import type { AuthBase } from './auth/baseAuth.js';
-import type { SdkCallEventPayload } from './types/event.js';
+import type { 
+  EventPayload, 
+  MiddlewareRequest, 
+  MiddlewareResponse, 
+  MiddlewareNext,
+  MiddlewareEventConfig 
+} from './types/event.js';
 import type { AuthRegistry, AuthMethodName, AllCredentials } from './types/auth.js';
 import { ApiKeyAuth } from './auth/apiKeyAuth.js';
 import { ScrawnLogger } from '../utils/logger.js';
+import { EventPayloadSchema } from './types/event.js';
 const log = new ScrawnLogger('Scrawn');
 
 /**
@@ -125,6 +132,7 @@ export class Scrawn {
    * @param payload.userId - Unique identifier of the user making the call
    * @param payload.debitAmount - Amount to debit from the user's account 
    * @returns A promise that resolves when the event is tracked
+   * @throws Error if payload validation fails
    * 
    * @example
    * ```typescript
@@ -134,10 +142,89 @@ export class Scrawn {
    * });
    * ```
    */
-  async sdkCallEventConsumer(payload: SdkCallEventPayload): Promise<void> {
-    // TODO: input validation using zod schema to be added here
-    return this.consumeEvent(payload, 'api', 'SERVERLESS_FUNCTION_CALL'); // TODO: change this event type when jaydeep changes it in backend
+  async sdkCallEventConsumer(payload: EventPayload): Promise<void> {
+    const validationResult = EventPayloadSchema.safeParse(payload);
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      log.error(`Invalid payload for sdkCallEventConsumer: ${errors}`);
+      throw new Error(`Payload validation failed: ${errors}`); // TODO: for error shit implement the callback shit
+    }
+    
+    return this.consumeEvent(validationResult.data, 'api', 'SERVERLESS_FUNCTION_CALL'); // TODO: change this event type when jaydeep changes it in backend
   }
+
+  /**
+   * Create an Express-compatible middleware for tracking API endpoint usage.
+   * 
+   * This middleware automatically tracks requests to your API endpoints for billing purposes.
+   * You provide an extractor function that determines the userId and debitAmount from each request.
+   * Optionally, you can provide a whitelist array to only track specific endpoints.
+   * 
+   * The middleware is framework-agnostic and works with Express, Fastify, and similar frameworks.
+   * 
+   * @param config - Configuration object for the middleware
+   * @param config.extractor - Function that extracts userId and debitAmount from the request
+   * @param config.whitelist - Optional array of endpoint paths to track (e.g., ['/api/generate', '/api/analyze'])
+   *                            If provided, only requests to these paths will be tracked.
+   *                            If omitted, all requests will be tracked.
+   * 
+   * @returns Express-compatible middleware function
+   * 
+   * @example
+   * ```typescript
+   * // Track all endpoints
+   * app.use(scrawn.middlewareEventConsumer({
+   *   extractor: (req) => ({
+   *     userId: req.user.id,
+   *     debitAmount: 1
+   *   })
+   * }));
+   * 
+   * // Track only specific endpoints
+   * app.use(scrawn.middlewareEventConsumer({
+   *   extractor: (req) => ({
+   *     userId: req.headers['x-user-id'] as string,
+   *     debitAmount: req.body.tokens || 1
+   *   }),
+   *   whitelist: ['/api/generate', '/api/analyze']
+   * }));
+   * ```
+   */
+  middlewareEventConsumer(config: MiddlewareEventConfig) {
+    return async (req: MiddlewareRequest, res: MiddlewareResponse, next: MiddlewareNext) => {
+      try {
+        if (config.whitelist && config.whitelist.length > 0) {
+          const requestPath = req.path || req.url || '';
+          const isWhitelisted = config.whitelist.some(path => requestPath === path || requestPath.startsWith(path));
+          
+          if (!isWhitelisted) {
+            return next();
+          }
+        }
+
+        const extractedPayload = await config.extractor(req);
+        
+        const validationResult = EventPayloadSchema.safeParse(extractedPayload);
+        if (!validationResult.success) {
+          const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+          log.error(`Invalid payload extracted in middlewareEventConsumer: ${errors}`); // TODO: for error shit implement the callback shit
+          return next();
+        }
+
+        this.consumeEvent(validationResult.data, 'api', 'API_ENDPOINT_CALL') // TODO: change this event type when jaydeep changes it in backend
+          .catch(error => {
+            log.error(`Failed to track middleware event: ${error.message}`);
+          }); // TODO: for error shit implement the callback shit
+
+        next();
+      } catch (error) {
+        log.error(`Error in middlewareEventConsumer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        next();
+      } // TODO: for error shit implement the callback shit
+    };
+  }
+
+  
 
   /**
    * Internal method to consume and process an event.
@@ -157,7 +244,7 @@ export class Scrawn {
    * @internal
    */
   private async consumeEvent<K extends AuthMethodName>(
-    payload: SdkCallEventPayload,
+    payload: EventPayload,
     authMethodName: K,
     eventType: string
   ): Promise<void> {
