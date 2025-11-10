@@ -18,7 +18,7 @@ async function main() {
     debitAmount: 5,
   });
   
-  console.log('✅ SDK call events consumed successfully');
+  console.log('SDK call events consumed successfully');
 }
 
 main().catch(console.error);

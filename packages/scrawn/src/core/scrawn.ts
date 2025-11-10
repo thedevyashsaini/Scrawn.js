@@ -91,7 +91,7 @@ export class Scrawn {
    * scrawn.registerAuthMethod('api', new ApiKeyAuth('sk_test_...'));
    * ```
    */
-  registerAuthMethod<K extends AuthMethodName>(
+  private registerAuthMethod<K extends AuthMethodName>(
     name: K,
     auth: AuthBase<AuthRegistry[K]>
   ) {
@@ -115,7 +115,7 @@ export class Scrawn {
    * // { apiKey: 'sk_test_...' }
    * ```
    */
-  async getCredsFor<K extends AuthMethodName>(
+  private async getCredsFor<K extends AuthMethodName>(
     authMethodName: K
   ): Promise<AuthRegistry[K]> {
     // Check cache first
