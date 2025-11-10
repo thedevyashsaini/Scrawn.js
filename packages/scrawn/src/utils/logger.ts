@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import pino from 'pino';
+import { ScrawnConfig } from 'src/config.js';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
@@ -13,7 +14,7 @@ fs.mkdirSync(path.dirname(logFilePath), { recursive: true });
 const baseLogger = pino(
   {
     name: 'scrawn',
-    level: process.env.SCRAWN_DEBUG ? 'debug' : 'info',
+    level: ScrawnConfig.logging.enableDebug ? 'debug' : 'info',
     timestamp: pino.stdTimeFunctions.isoTime,
   },
   pino.destination(logFilePath)

@@ -27,6 +27,7 @@ import { createConnectTransport } from '@connectrpc/connect-node';
 import { RequestBuilder } from './requestBuilder.js';
 import { ScrawnLogger } from '../../utils/logger.js';
 import type { ServiceMethodNames } from './types.js';
+import { ScrawnConfig } from '../../config.js';
 
 const log = new ScrawnLogger('GrpcClient');
 
@@ -90,7 +91,7 @@ export class GrpcClient {
 
     this.transport = createConnectTransport({
       baseUrl: this.baseURL,
-      httpVersion: '1.1',
+      httpVersion: ScrawnConfig.grpc.httpVersion,
     });
 
     log.info('gRPC client initialized successfully');
