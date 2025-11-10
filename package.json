@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "cd packages/scrawn && bun run build",
+    "build": "./clean_build.sh",
+    "rebuild": "cd packages/scrawn && bun run build",
     "clean": "cd packages/scrawn && bun run clean",
     "install": "bun install && cd packages/scrawn && bun install && cd ../.. && cd examples && bun install" 
   },
