@@ -1,9 +1,11 @@
 import express from "express";
 import { EventPayload, Scrawn } from "@scrawn/core";
+import { config } from 'dotenv';
+config({path: '.env.local'});
 
-// Initialize Scrawn SDK
 const scrawn = new Scrawn({
-  apiKey: process.env.SCRAWN_API_KEY as `sk_${string}`,
+  apiKey: (process.env.SCRAWN_KEY || '') as `scrn_${string}`,
+  baseURL: process.env.SCRAWN_BASE_URL || 'http://localhost:8000',
 });
 
 // Create Express app

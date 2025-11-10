@@ -10,6 +10,11 @@ import type { AuthRegistry, AuthMethodName, AllCredentials } from './types/auth.
 import { ApiKeyAuth } from './auth/apiKeyAuth.js';
 import { ScrawnLogger } from '../utils/logger.js';
 import { EventPayloadSchema } from './types/event.js';
+import { createClient, type Interceptor } from '@connectrpc/connect';
+import { createConnectTransport } from '@connectrpc/connect-node';
+import { EventService } from '../gen/event/v1/event_connect.js';
+import { EventType, SDKCallType } from '../gen/event/v1/event_pb.js';
+import type { Client, Transport } from '@connectrpc/connect';
 const log = new ScrawnLogger('Scrawn');
 
 /**
@@ -43,21 +48,52 @@ export class Scrawn {
   /** API key used for default authentication */
   private apiKey: AllCredentials['apiKey'];
 
+  /** Base URL for gRPC API calls */
+  private baseURL: string;
+
+  /** gRPC transport for making API calls */
+  private transport: Transport;
+
+  /** gRPC client for EventService */
+  private eventClient: any;
+
   /**
    * Creates a new Scrawn SDK instance.
    * 
    * @param config - Configuration object
    * @param config.apiKey - Your Scrawn API key for authentication
+   * @param config.baseURL - Base URL for the Scrawn API (e.g., 'https://api.scrawn.dev')
    * 
    * @example
    * ```typescript
-   * const scrawn = new Scrawn({ apiKey: 'sk_test_...' });
+   * const scrawn = new Scrawn({ 
+   *   apiKey: 'sk_test_...',
+   *   baseURL: 'https://api.scrawn.dev'
+   * });
    * await scrawn.init();
    * ```
    */
-  constructor(config: { apiKey: AllCredentials['apiKey'] }) {
+  constructor(config: { apiKey: AllCredentials['apiKey']; baseURL: string }) {
     try {
       this.apiKey = config.apiKey;
+      this.baseURL = config.baseURL;
+
+      // Create an interceptor to add the Authorization header
+      const authInterceptor: Interceptor = (next) => async (req) => {
+        req.header.set('Authorization', `Bearer ${this.apiKey}`);
+        return await next(req);
+      };
+
+      // Initialize gRPC transport
+      this.transport = createConnectTransport({
+        baseUrl: this.baseURL,
+        httpVersion: '1.1',
+        interceptors: [authInterceptor],
+      });
+
+      // Create EventService client (using type assertion due to version mismatch in generated code)
+      this.eventClient = createClient(EventService as any, this.transport);
+
       this.registerAuthMethod('api', new ApiKeyAuth(this.apiKey));
     } catch (error) {
       log.error('Failed to initialize Scrawn SDK');
@@ -150,7 +186,7 @@ export class Scrawn {
       throw new Error(`Payload validation failed: ${errors}`); // TODO: for error shit implement the callback shit
     }
     
-    return this.consumeEvent(validationResult.data, 'api', 'SERVERLESS_FUNCTION_CALL'); // TODO: change this event type when jaydeep changes it in backend
+    return this.consumeEvent(validationResult.data, 'api', 'SDK_CALL'); // TODO: change this event type when jaydeep changes it in backend
   }
 
   /**
@@ -211,7 +247,7 @@ export class Scrawn {
           return next();
         }
 
-        this.consumeEvent(validationResult.data, 'api', 'API_ENDPOINT_CALL') // TODO: change this event type when jaydeep changes it in backend
+        this.consumeEvent(validationResult.data, 'api', 'MIDDLEWARE_CALL') // TODO: change this event type when jaydeep changes it in backend
           .catch(error => {
             log.error(`Failed to track middleware event: ${error.message}`);
           }); // TODO: for error shit implement the callback shit
@@ -233,20 +269,20 @@ export class Scrawn {
    * 1. Validates authentication
    * 2. Fetches/caches credentials
    * 3. Executes any pre-run hooks
-   * 4. Processes the event
+   * 4. Processes the event via gRPC call to RegisterEvent
    * 
    * @param payload - Event payload data
    * @param authMethodName - Name of the auth method to use (must be in AuthRegistry)
-   * @param eventType - Type of event for categorization
+   * @param eventType - Type of event for categorization (RAW or MIDDLEWARE_CALL)
    * @returns A promise that resolves when the event is processed
-   * @throws Error if auth method is not registered
+   * @throws Error if auth method is not registered or gRPC call fails
    * 
    * @internal
    */
   private async consumeEvent<K extends AuthMethodName>(
     payload: EventPayload,
     authMethodName: K,
-    eventType: string
+    eventType: 'SDK_CALL' | 'MIDDLEWARE_CALL'
   ): Promise<void> {
     const auth = this.authMethods.get(authMethodName);
     if (!auth) throw new Error(`No auth registered for type ${authMethodName}`);
@@ -257,9 +293,32 @@ export class Scrawn {
     // Get creds (from cache or fresh)
     const creds = await this.getCredsFor(authMethodName);
     
-    // Ingest the event here
-    log.info(`Ingesting event (type: ${eventType}) with creds: ${JSON.stringify(creds)}, payload: ${JSON.stringify(payload)}`);
-    // TODO: Actual API call to Scrawn backend will go here
+    // Map event type to SDKCallType
+    const sdkCallType = eventType === 'SDK_CALL' 
+      ? SDKCallType.RAW 
+      : SDKCallType.MIDDLEWARE_CALL;
+
+    try {
+      log.info(`Ingesting event (type: ${eventType}) with creds: ${JSON.stringify(creds)}, payload: ${JSON.stringify(payload)}`);
+      
+      // Make gRPC call to RegisterEvent
+      const response = await this.eventClient.registerEvent({
+        type: EventType.SDK_CALL,
+        userId: payload.userId,
+        data: {
+          case: 'sdkCall',
+          value: {
+            sdkCallType: sdkCallType,
+            debitAmount: payload.debitAmount,
+          },
+        },
+      });
+
+      log.info(`Event registered successfully: ${JSON.stringify(response)}`);
+    } catch (error) {
+      log.error(`Failed to register event: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
 
     if (auth.postRun) await auth.postRun();
   }

@@ -12,9 +12,8 @@
     "@types/node": "^24.10.0"
   },
   "dependencies": {
-    "express": "^4.18.2"
-  },
-  "peerDependencies": {
-    "@scrawn/core": "^0.0.1"
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "@scrawn/core": "link:@scrawn/core"
   }
 }

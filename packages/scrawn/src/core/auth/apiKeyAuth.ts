@@ -8,13 +8,13 @@ const log = new ScrawnLogger('Auth');
  * API key format: sk_ followed by 16 alphanumeric characters
  * @example 'sk_abc123def456ghi7'
  */
-export type ApiKeyFormat = `sk_${string}`;
+export type ApiKeyFormat = `scrn_${string}`;
 
 /**
  * Type guard to validate API key format
  */
 export function isValidApiKey(key: string): key is ApiKeyFormat {
-  return /^sk_[a-zA-Z0-9]{16}$/.test(key);
+  return /^scrn_[a-zA-Z0-9]{32}$/.test(key);
 }
 
 /**

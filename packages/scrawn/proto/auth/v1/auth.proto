@@ -3,31 +3,20 @@ syntax = "proto3";
 package auth.v1;
 
 service AuthService {
-  // SignJWT signs a payload and returns a JWT token
-  rpc SignJWT(SignJWTRequest) returns (SignJWTResponse) {}
-
-  // GetRoles extracts and returns the roles array from a JWT payload
-  rpc GetRoles(GetRolesRequest) returns (GetRolesResponse) {}
+  // CreateAPIKey creates a new API key for the authenticated user
+  rpc CreateAPIKey(CreateAPIKeyRequest) returns (CreateAPIKeyResponse) {}
 }
 
-message UserPayload {
-  string id = 1;
-  repeated string roles = 2;
+message CreateAPIKeyRequest {
+  string name = 1;
+  // expiresIn is the expiration time in seconds from now
+  int64 expiresIn = 2;
 }
 
-message SignJWTRequest {
-  UserPayload payload = 1;
-  string secret = 2;
-}
-
-message SignJWTResponse {
-  string token = 1;
-}
-
-message GetRolesRequest {
-  string token = 1;
-}
-
-message GetRolesResponse {
-  repeated string roles = 1;
+message CreateAPIKeyResponse {
+  string apiKeyId = 1;
+  string apiKey = 2;
+  string name = 3;
+  string createdAt = 4;
+  string expiresAt = 5;
 }
