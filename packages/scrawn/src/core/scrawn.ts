@@ -13,6 +13,7 @@ import { EventPayloadSchema } from './types/event.js';
 import { GrpcClient } from './grpc/index.js';
 import { EventService } from '../gen/event/v1/event_connect.js';
 import { EventType, SDKCallType, SDKCall } from '../gen/event/v1/event_pb.js';
+import { PaymentService } from '../gen/payment/v1/payment_connect.js';
 
 const log = new ScrawnLogger('Scrawn');
 
@@ -170,15 +171,18 @@ export class Scrawn {
    * 
    * This middleware automatically tracks requests to your API endpoints for billing purposes.
    * You provide an extractor function that determines the userId and debitAmount from each request.
-   * Optionally, you can provide a whitelist array to only track specific endpoints.
+   * Optionally, you can provide a whitelist array to only track specific endpoints,
+   * or a blacklist array to exclude specific endpoints from tracking.
    * 
    * The middleware is framework-agnostic and works with Express, Fastify, and similar frameworks.
    * 
    * @param config - Configuration object for the middleware
-   * @param config.extractor - Function that extracts userId and debitAmount from the request
+   * @param config.extractor - Function that extracts userId and debitAmount from the request. Return null to skip tracking.
    * @param config.whitelist - Optional array of endpoint paths to track (e.g., ['/api/generate', '/api/analyze'])
    *                            If provided, only requests to these paths will be tracked.
    *                            If omitted, all requests will be tracked.
+   * @param config.blacklist - Optional array of endpoint paths to exclude from tracking (e.g., ['/health', '/api/collect-payment'])
+   *                            Takes precedence over whitelist. These endpoints will never be tracked.
    * 
    * @returns Express-compatible middleware function
    * 
@@ -200,13 +204,33 @@ export class Scrawn {
    *   }),
    *   whitelist: ['/api/generate', '/api/analyze']
    * }));
+   * 
+   * // Exclude specific endpoints from tracking
+   * app.use(scrawn.middlewareEventConsumer({
+   *   extractor: (req) => ({
+   *     userId: req.user.id,
+   *     debitAmount: 1
+   *   }),
+   *   blacklist: ['/health', '/api/collect-payment']
+   * }));
    * ```
    */
   middlewareEventConsumer(config: MiddlewareEventConfig) {
     return async (req: MiddlewareRequest, res: MiddlewareResponse, next: MiddlewareNext) => {
       try {
+        const requestPath = req.path || req.url || '';
+        
+        // Check blacklist first (takes precedence)
+        if (config.blacklist && config.blacklist.length > 0) {
+          const isBlacklisted = config.blacklist.some(path => requestPath === path || requestPath.startsWith(path));
+          
+          if (isBlacklisted) {
+            return next();
+          }
+        }
+        
+        // Then check whitelist if provided
         if (config.whitelist && config.whitelist.length > 0) {
-          const requestPath = req.path || req.url || '';
           const isWhitelisted = config.whitelist.some(path => requestPath === path || requestPath.startsWith(path));
           
           if (!isWhitelisted) {
@@ -216,6 +240,12 @@ export class Scrawn {
 
         const extractedPayload = await config.extractor(req);
         
+        // If extractor returns null, skip tracking
+        if (extractedPayload === null) {
+          log.warn(`Extractor returned null for path: ${requestPath}. Skipping event tracking.`);
+          return next();
+        }
+        
         const validationResult = EventPayloadSchema.safeParse(extractedPayload);
         if (!validationResult.success) {
           const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
@@ -223,7 +253,7 @@ export class Scrawn {
           return next();
         }
 
-        this.consumeEvent(validationResult.data, 'api', 'MIDDLEWARE_CALL') // TODO: change this event type when jaydeep changes it in backend
+        this.consumeEvent(validationResult.data, 'api', 'MIDDLEWARE_CALL') 
           .catch(error => {
             log.error(`Failed to track middleware event: ${error.message}`);
           }); // TODO: for error shit implement the callback shit
@@ -234,6 +264,50 @@ export class Scrawn {
         next();
       } // TODO: for error shit implement the callback shit
     };
+  }
+
+  /**
+   * Collect payment by creating a checkout link for a user.
+   * 
+   * Generates a payment checkout link for the specified user via the Scrawn payment service.
+   * The checkout link can be used to direct users to complete their payment.
+   * 
+   * @param userId - Unique identifier of the user to collect payment from
+   * @returns A promise that resolves to the checkout link URL
+   * @throws Error if the gRPC call fails or if authentication is invalid
+   * 
+   * @example
+   * ```typescript
+   * const checkoutLink = await scrawn.collectPayment('user_abc123');
+   * // Returns: 'https://checkout.scrawn.dev/...'
+   * // Redirect user to this URL to complete payment
+   * ```
+   */
+  async collectPayment(userId: string): Promise<string> {
+    // Validate input
+    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+      log.error('Invalid userId provided to collectPayment');
+      throw new Error('userId must be a non-empty string');
+    }
+
+    // Get credentials for authentication
+    const creds = await this.getCredsFor('api');
+
+    try {
+      log.info(`Creating checkout link for user: ${userId}`);
+      
+      const response = await this.grpcClient
+        .newCall(PaymentService, 'createCheckoutLink')
+        .addHeader('Authorization', `Bearer ${creds.apiKey}`)
+        .addPayload({ userId })
+        .request();
+
+      log.info(`Checkout link created successfully: ${response.checkoutLink}`);
+      return response.checkoutLink;
+    } catch (error) {
+      log.error(`Failed to create checkout link: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
   }
 
   

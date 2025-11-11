@@ -78,7 +78,7 @@ export type MiddlewareNext = (error?: any) => void;
  * Extractor function that derives userId and debitAmount from a request.
  * 
  * @param req - The incoming request object
- * @returns An object containing userId and debitAmount, or a Promise resolving to it
+ * @returns An object containing userId and debitAmount, a Promise resolving to it, or null to skip tracking
  * 
  * @example
  * ```typescript
@@ -86,17 +86,24 @@ export type MiddlewareNext = (error?: any) => void;
  *   userId: req.headers['x-user-id'] as string,
  *   debitAmount: 1
  * });
+ * 
+ * // Return null to skip tracking
+ * const extractor: PayloadExtractor = (req) => {
+ *   if (req.path === '/health') return null;
+ *   return { userId: req.user.id, debitAmount: 1 };
+ * };
  * ```
  */
 export type PayloadExtractor = (
     req: MiddlewareRequest
-) => EventPayload | Promise<EventPayload>;
+) => EventPayload | Promise<EventPayload> | null | Promise<null>;
 
 /**
  * Configuration options for the Express middleware event consumer.
  * 
- * @property extractor - Function to extract userId and debitAmount from request
+ * @property extractor - Function to extract userId and debitAmount from request. Return null to skip tracking.
  * @property whitelist - Optional array of endpoint paths to track (if provided, only these endpoints will be tracked)
+ * @property blacklist - Optional array of endpoint paths to exclude from tracking (these endpoints will never be tracked)
  * 
  * @example
  * ```typescript
@@ -105,13 +112,16 @@ export type PayloadExtractor = (
  *     userId: req.user?.id,
  *     debitAmount: calculateCost(req)
  *   }),
- *   whitelist: ['/api/expensive-operation', '/api/premium-feature']
+ *   whitelist: ['/api/expensive-operation', '/api/premium-feature'],
+ *   blacklist: ['/api/health', '/api/collect-payment']
  * };
  * ```
  */
 export interface MiddlewareEventConfig {
-    /** Function to extract event payload from request */
+    /** Function to extract event payload from request. Return null to skip tracking. */
     extractor: PayloadExtractor;
     /** Optional list of endpoint paths to track. If undefined, tracks all endpoints */
     whitelist?: string[];
+    /** Optional list of endpoint paths to exclude from tracking. Takes precedence over whitelist. */
+    blacklist?: string[];
 }

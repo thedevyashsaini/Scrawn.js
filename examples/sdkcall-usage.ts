@@ -19,6 +19,9 @@ async function main() {
   });
   
   console.log('SDK call events consumed successfully');
+  
+  const checkoutLink = await scrawn.collectPayment('c0971bcb-b901-4c3e-a191-c9a97871c39f');
+  console.log('Checkout link created:', checkoutLink, "\nGo to the link to complete the payment.");
 }
 
 main().catch(console.error);
