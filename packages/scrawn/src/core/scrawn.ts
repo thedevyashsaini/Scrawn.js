@@ -9,6 +9,7 @@ import type {
 import type { AuthRegistry, AuthMethodName, AllCredentials } from './types/auth.js';
 import { ApiKeyAuth } from './auth/apiKeyAuth.js';
 import { ScrawnLogger } from '../utils/logger.js';
+import { matchPath } from '../utils/pathMatcher.js';
 import { EventPayloadSchema } from './types/event.js';
 import { GrpcClient } from './grpc/index.js';
 import { EventService } from '../gen/event/v1/event_connect.js';
@@ -178,11 +179,14 @@ export class Scrawn {
    * 
    * @param config - Configuration object for the middleware
    * @param config.extractor - Function that extracts userId and debitAmount from the request. Return null to skip tracking.
-   * @param config.whitelist - Optional array of endpoint paths to track (e.g., ['/api/generate', '/api/analyze'])
-   *                            If provided, only requests to these paths will be tracked.
-   *                            If omitted, all requests will be tracked.
-   * @param config.blacklist - Optional array of endpoint paths to exclude from tracking (e.g., ['/health', '/api/collect-payment'])
-   *                            Takes precedence over whitelist. These endpoints will never be tracked.
+   * @param config.whitelist - Optional array of endpoint patterns to track. Supports wildcards:
+   *                            - Exact match: /api/users
+   *                            - Single segment (*): /api/* matches /api/users but not /api/users/123
+   *                            - Multi-segment (**): /api/** matches any path starting with /api/
+   *                            - Mixed: /api/star/profile, **.php
+   *                            Takes precedence over blacklist. If omitted, all requests will be tracked.
+   * @param config.blacklist - Optional array of endpoint patterns to exclude. Same wildcard support as whitelist.
+   *                            Only applies to endpoints not in the whitelist.
    * 
    * @returns Express-compatible middleware function
    * 
@@ -196,13 +200,13 @@ export class Scrawn {
    *   })
    * }));
    * 
-   * // Track only specific endpoints
+   * // Track only specific endpoints with wildcards
    * app.use(scrawn.middlewareEventConsumer({
    *   extractor: (req) => ({
    *     userId: req.headers['x-user-id'] as string,
    *     debitAmount: req.body.tokens || 1
    *   }),
-   *   whitelist: ['/api/generate', '/api/analyze']
+   *   whitelist: ['/api/generate', '/api/analyze', '/api/v1/*']
    * }));
    * 
    * // Exclude specific endpoints from tracking
@@ -211,7 +215,7 @@ export class Scrawn {
    *     userId: req.user.id,
    *     debitAmount: 1
    *   }),
-   *   blacklist: ['/health', '/api/collect-payment']
+   *   blacklist: ['/health', '/api/collect-payment', '/internal/**', '**.tmp']
    * }));
    * ```
    */
@@ -220,20 +224,20 @@ export class Scrawn {
       try {
         const requestPath = req.path || req.url || '';
         
-        // Check blacklist first (takes precedence)
-        if (config.blacklist && config.blacklist.length > 0) {
-          const isBlacklisted = config.blacklist.some(path => requestPath === path || requestPath.startsWith(path));
+        // Check whitelist first (takes precedence)
+        if (config.whitelist && config.whitelist.length > 0) {
+          const isWhitelisted = config.whitelist.some(pattern => matchPath(requestPath, pattern));
           
-          if (isBlacklisted) {
+          if (!isWhitelisted) {
             return next();
           }
         }
         
-        // Then check whitelist if provided
-        if (config.whitelist && config.whitelist.length > 0) {
-          const isWhitelisted = config.whitelist.some(path => requestPath === path || requestPath.startsWith(path));
+        // Then check blacklist
+        if (config.blacklist && config.blacklist.length > 0) {
+          const isBlacklisted = config.blacklist.some(pattern => matchPath(requestPath, pattern));
           
-          if (!isWhitelisted) {
+          if (isBlacklisted) {
             return next();
           }
         }

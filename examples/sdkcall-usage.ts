@@ -10,12 +10,12 @@ async function main() {
   
   await scrawn.sdkCallEventConsumer({ 
     userId: 'c0971bcb-b901-4c3e-a191-c9a97871c39f', 
-    debitAmount: 3,
+    debitAmount: 3000,
   });
   
   await scrawn.sdkCallEventConsumer({ 
     userId: '0a1e38a5-e2f3-450f-9796-59ad406d93dc', 
-    debitAmount: 5,
+    debitAmount: 5000,
   });
   
   console.log('SDK call events consumed successfully');

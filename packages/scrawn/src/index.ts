@@ -5,6 +5,9 @@ export * from './core/types/auth.js';
 // Export gRPC client abstraction layer
 export * from './core/grpc/index.js';
 
+// Export utilities
+export { matchPath } from './utils/pathMatcher.js';
+
 // Export generated types for advanced usage
 export * from './gen/event/v1/event_connect.js';
 export * from './gen/event/v1/event_pb.js';

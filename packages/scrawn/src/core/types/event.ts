@@ -102,8 +102,8 @@ export type PayloadExtractor = (
  * Configuration options for the Express middleware event consumer.
  * 
  * @property extractor - Function to extract userId and debitAmount from request. Return null to skip tracking.
- * @property whitelist - Optional array of endpoint paths to track (if provided, only these endpoints will be tracked)
- * @property blacklist - Optional array of endpoint paths to exclude from tracking (these endpoints will never be tracked)
+ * @property whitelist - Optional array of endpoint patterns to track. Supports wildcards (* for single segment, ** for multiple segments). Takes precedence over blacklist.
+ * @property blacklist - Optional array of endpoint patterns to exclude from tracking. Same wildcard support as whitelist. Only applies to endpoints not in whitelist.
  * 
  * @example
  * ```typescript
@@ -112,16 +112,16 @@ export type PayloadExtractor = (
  *     userId: req.user?.id,
  *     debitAmount: calculateCost(req)
  *   }),
- *   whitelist: ['/api/expensive-operation', '/api/premium-feature'],
- *   blacklist: ['/api/health', '/api/collect-payment']
+ *   whitelist: ['/api/expensive-operation', '/api/premium-feature', '/api/*\/data'],
+ *   blacklist: ['/api/health', '/api/collect-payment', '**.tmp']
  * };
  * ```
  */
 export interface MiddlewareEventConfig {
     /** Function to extract event payload from request. Return null to skip tracking. */
     extractor: PayloadExtractor;
-    /** Optional list of endpoint paths to track. If undefined, tracks all endpoints */
+    /** Optional patterns to track (exact match or wildcards: * for single segment, ** for multi-segment). Takes precedence over blacklist. */
     whitelist?: string[];
-    /** Optional list of endpoint paths to exclude from tracking. Takes precedence over whitelist. */
+    /** Optional patterns to exclude (exact match or wildcards: * for single segment, ** for multi-segment). Only applies to endpoints not in whitelist. */
     blacklist?: string[];
 }

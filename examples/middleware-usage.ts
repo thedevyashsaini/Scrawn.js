@@ -12,7 +12,6 @@ const scrawn = new Scrawn({
 const app = express();
 app.use(express.json());
 
-// Scrawn tracking middleware - tracks all endpoints except payment collection
 app.use(
   scrawn.middlewareEventConsumer({
     extractor: (req): EventPayload => {
