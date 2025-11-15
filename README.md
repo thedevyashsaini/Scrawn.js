@@ -1,52 +1,41 @@
 # Scrawn SDK
 
-A TypeScript SDK for billing infrastructure.
+## What is Scrawn.js?
 
-## Structure
+Scrawn.js is the official TypeScript SDK for integrating Scrawn's usage-based billing into your applications. It provides a simple, type-safe interface for tracking usage events and collecting payments via gRPC.
 
-```
-packages/
-  scrawn/              # Core SDK package with all functionality
-```
+[View Docs](https://scrawn.vercel.app/docs/scrawn-js)
+
+## Key Features
+
+- **Simple API** - Track usage with a single function call
+- **Type-Safe** - Full TypeScript support with auto-completion
+- **gRPC-Powered** - Built on Connect-RPC for efficient communication
+- **Framework Agnostic** - Works with any JavaScript framework
+- **Middleware Support** - Built-in middleware with whitelist/blacklist patterns
 
 ## Installation
 
+Install Scrawn.js in your project:
+
+
 ```bash
-npm install @scrawn/core
+bun add @scrawn/core
 ```
 
-## Quick Start
+## Quick Example
 
 ```typescript
-import { Scrawn, type EventPayload } from '@scrawn/core';
+import { Scrawn } from '@scrawn/core';
 
-// Initialize
-const scrawn = new Scrawn({ apiKey: process.env.SCRAWN_KEY });
-await scrawn.init();
+const scrawn = new Scrawn({
+  apiKey: process.env.SCRAWN_KEY as `scrn_${string}`,
+  baseURL: process.env.SCRAWN_BASE_URL || 'http://localhost:8069',
+});
 
-// Track SDK usage
-await scrawn.sdkCallEventConsumer({ 
-  userId: 'u123', 
-  debitAmount: 3,
+// Track a billable event
+await scrawn.sdkCallEventConsumer({
+  userId: 'user-123',
+  debitAmount: 100,
 });
 ```
-
-## Development
-
-### Setup
-
-```bash
-# Install dependencies
-npm install
-npm run clean
-```
-
-### Building
-
-```bash
-npm run build
-``
-
-## License
-
-MIT

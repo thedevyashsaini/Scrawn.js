@@ -5,7 +5,7 @@ config({path: '.env.local'});
 
 const scrawn = new Scrawn({
   apiKey: (process.env.SCRAWN_KEY || '') as `scrn_${string}`,
-  baseURL: process.env.SCRAWN_BASE_URL || 'http://localhost:8000',
+  baseURL: process.env.SCRAWN_BASE_URL || 'http://localhost:8069',
 });
 
 // Create Express app
