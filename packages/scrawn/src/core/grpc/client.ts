@@ -88,13 +88,18 @@ export class GrpcClient {
     this.baseURL = baseURL;
 
     log.info(`Initializing gRPC client for ${baseURL}`);
-
+    
     this.transport = createConnectTransport({
       baseUrl: this.baseURL,
       httpVersion: ScrawnConfig.grpc.httpVersion,
+      useBinaryFormat: true, // Use binary protobuf (smaller than JSON)
+      nodeOptions: {
+        // HTTP/2 provides persistent connection with multiplexing
+        rejectUnauthorized: true, // Verify SSL certificates
+      },
     });
 
-    log.info('gRPC client initialized successfully');
+    log.info(`gRPC client initialized with HTTP/${ScrawnConfig.grpc.httpVersion}`);
   }
 
   /**
