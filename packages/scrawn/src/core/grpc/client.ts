@@ -93,10 +93,6 @@ export class GrpcClient {
       baseUrl: this.baseURL,
       httpVersion: ScrawnConfig.grpc.httpVersion,
       useBinaryFormat: true, // Use binary protobuf (smaller than JSON)
-      nodeOptions: {
-        // HTTP/2 provides persistent connection with multiplexing
-        rejectUnauthorized: true, // Verify SSL certificates
-      },
     });
 
     log.info(`gRPC client initialized with HTTP/${ScrawnConfig.grpc.httpVersion}`);

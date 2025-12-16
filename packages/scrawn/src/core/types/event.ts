@@ -7,12 +7,16 @@ import { z } from 'zod';
  * 
  * Validates:
  * - userId: non-empty string
- * - debitAmount: positive number
+ * - Either debitAmount (number) OR debitTag (string), but not both
  */
 export const EventPayloadSchema = z.object({
     userId: z.string().min(1, 'userId must be a non-empty string'),
-    debitAmount: z.number().positive('debitAmount must be a positive number'),
-});
+    debitAmount: z.number().positive('debitAmount must be a positive number').optional(),
+    debitTag: z.string().min(1, 'debitTag must be a non-empty string').optional(),
+}).refine(
+    (data) => (data.debitAmount !== undefined) !== (data.debitTag !== undefined),
+    { message: 'Exactly one of debitAmount or debitTag must be provided' }
+);
 
 /**
  * Payload structure for event tracking.
@@ -20,13 +24,23 @@ export const EventPayloadSchema = z.object({
  * Used by both sdkCallEventConsumer and middlewareEventConsumer.
  * 
  * @property userId - The user ID associated with this event
- * @property debitAmount - Amount to debit for billing tracking
+ * @property debitAmount - (Optional) Direct amount to debit for billing tracking
+ * @property debitTag - (Optional) Named price tag to look up amount from backend
+ * 
+ * Note: Exactly one of debitAmount or debitTag must be provided.
  * 
  * @example
  * ```typescript
- * const payload: EventPayload = {
+ * // Using direct amount
+ * const payload1: EventPayload = {
  *   userId: 'u123',
  *   debitAmount: 5
+ * };
+ * 
+ * // Using price tag
+ * const payload2: EventPayload = {
+ *   userId: 'u123',
+ *   debitTag: 'PREMIUM_FEATURE'
  * };
  * ```
  */
@@ -75,22 +89,32 @@ export interface MiddlewareResponse {
 export type MiddlewareNext = (error?: any) => void;
 
 /**
- * Extractor function that derives userId and debitAmount from a request.
+ * Extractor function that derives userId and debit info from a request.
  * 
  * @param req - The incoming request object
- * @returns An object containing userId and debitAmount, a Promise resolving to it, or null to skip tracking
+ * @returns An object containing userId and either debitAmount or debitTag, a Promise resolving to it, or null to skip tracking
  * 
  * @example
  * ```typescript
+ * // Using direct amount
  * const extractor: PayloadExtractor = (req) => ({
  *   userId: req.headers['x-user-id'] as string,
  *   debitAmount: 1
  * });
  * 
- * // Return null to skip tracking
+ * // Using price tag
+ * const extractor: PayloadExtractor = (req) => ({
+ *   userId: req.user.id,
+ *   debitTag: 'STANDARD_API_CALL'
+ * });
+ * 
+ * // Dynamic tag based on route
  * const extractor: PayloadExtractor = (req) => {
  *   if (req.path === '/health') return null;
- *   return { userId: req.user.id, debitAmount: 1 };
+ *   return { 
+ *     userId: req.user.id, 
+ *     debitTag: req.path.startsWith('/premium') ? 'PREMIUM_API' : 'STANDARD_API'
+ *   };
  * };
  * ```
  */
@@ -101,19 +125,30 @@ export type PayloadExtractor = (
 /**
  * Configuration options for the Express middleware event consumer.
  * 
- * @property extractor - Function to extract userId and debitAmount from request. Return null to skip tracking.
+ * @property extractor - Function to extract userId and debit info from request. Return null to skip tracking.
  * @property whitelist - Optional array of endpoint patterns to track. Supports wildcards (* for single segment, ** for multiple segments). Takes precedence over blacklist.
  * @property blacklist - Optional array of endpoint patterns to exclude from tracking. Same wildcard support as whitelist. Only applies to endpoints not in whitelist.
  * 
  * @example
  * ```typescript
- * const config: MiddlewareEventConfig = {
+ * // Using direct amounts
+ * const config1: MiddlewareEventConfig = {
  *   extractor: (req) => ({
  *     userId: req.user?.id,
  *     debitAmount: calculateCost(req)
  *   }),
- *   whitelist: ['/api/expensive-operation', '/api/premium-feature', '/api/*\/data'],
- *   blacklist: ['/api/health', '/api/collect-payment', '**.tmp']
+ *   whitelist: ['/api/expensive-operation', '/api/premium-feature'],
+ *   blacklist: ['/api/health']
+ * };
+ * 
+ * // Using price tags
+ * const config2: MiddlewareEventConfig = {
+ *   extractor: (req) => ({
+ *     userId: req.user?.id,
+ *     debitTag: req.path.startsWith('/premium') ? 'PREMIUM_API' : 'STANDARD_API'
+ *   }),
+ *   whitelist: ['/api/**'],
+ *   blacklist: ['**.tmp']
  * };
  * ```
  */

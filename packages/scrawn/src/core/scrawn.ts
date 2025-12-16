@@ -37,8 +37,11 @@ const log = new ScrawnLogger('Scrawn');
  * const scrawn = new Scrawn({ apiKey: process.env.SCRAWN_KEY });
  * await scrawn.init();
  * 
- * // Track SDK calls
+ * // Track SDK calls with direct amount
  * await scrawn.sdkCallEventConsumer({ userId: 'u123', debitAmount: 3 });
+ * 
+ * // Track SDK calls with price tag
+ * await scrawn.sdkCallEventConsumer({ userId: 'u123', debitTag: 'PREMIUM_FEATURE' });
  * ```
  */
 export class Scrawn {
@@ -164,15 +167,23 @@ export class Scrawn {
    * 
    * @param payload - The SDK call data to track
    * @param payload.userId - Unique identifier of the user making the call
-   * @param payload.debitAmount - Amount to debit from the user's account 
+   * @param payload.debitAmount - (Optional) Direct amount to debit from the user's account
+   * @param payload.debitTag - (Optional) Named price tag for backend-managed pricing
    * @returns A promise that resolves when the event is tracked
-   * @throws Error if payload validation fails
+   * @throws Error if payload validation fails or both/neither debit fields are provided
    * 
    * @example
    * ```typescript
+   * // Using direct amount
    * await scrawn.sdkCallEventConsumer({
    *   userId: 'user_abc123',
    *   debitAmount: 10
+   * });
+   * 
+   * // Using price tag
+   * await scrawn.sdkCallEventConsumer({
+   *   userId: 'user_abc123',
+   *   debitTag: 'PREMIUM_FEATURE'
    * });
    * ```
    */
@@ -198,7 +209,7 @@ export class Scrawn {
    * Create an Express-compatible middleware for tracking API endpoint usage.
    * 
    * This middleware automatically tracks requests to your API endpoints for billing purposes.
-   * You provide an extractor function that determines the userId and debitAmount from each request.
+   * You provide an extractor function that determines the userId and debit info (amount or tag) from each request.
    * Optionally, you can provide a whitelist array to only track specific endpoints,
    * or a blacklist array to exclude specific endpoints from tracking.
    * 
@@ -388,6 +399,11 @@ export class Scrawn {
     try {
       log.info(`Ingesting event (type: ${eventType}) with creds: ${JSON.stringify(creds)}, payload: ${JSON.stringify(payload)}`);
       
+      // Build debit field based on whether amount or tag is provided
+      const debitField = payload.debitAmount !== undefined
+        ? { case: 'amount' as const, value: payload.debitAmount }
+        : { case: 'tag' as const, value: payload.debitTag! };
+      
       const response = await this.grpcClient
         .newCall(EventService, 'registerEvent')
         .addHeader('Authorization', `Bearer ${creds.apiKey}`)
@@ -398,7 +414,7 @@ export class Scrawn {
             case: 'sdkCall',
             value: new SDKCall({
               sdkCallType: sdkCallType,
-              debitAmount: payload.debitAmount,
+              debit: debitField,
             }),
           },
         })

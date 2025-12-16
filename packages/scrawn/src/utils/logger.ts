@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import pino from 'pino';
-import { ScrawnConfig } from 'src/config.js';
+import { ScrawnConfig } from '../config.js';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
