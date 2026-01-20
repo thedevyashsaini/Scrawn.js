@@ -2,6 +2,9 @@ export * from './core/scrawn.js';
 export * from './core/types/event.js';
 export * from './core/types/auth.js';
 
+// Export error classes for user error handling
+export * from './core/errors/index.js';
+
 // Export gRPC client abstraction layer
 export * from './core/grpc/index.js';
 

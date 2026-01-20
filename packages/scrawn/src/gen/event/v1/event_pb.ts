@@ -117,9 +117,21 @@ export class SDKCall extends Message<SDKCall> {
   sdkCallType = SDKCallType.SDKCallType_UNSPECIFIED;
 
   /**
-   * @generated from field: float debitAmount = 2;
+   * @generated from oneof event.v1.SDKCall.debit
    */
-  debitAmount = 0;
+  debit: {
+    /**
+     * @generated from field: float amount = 2;
+     */
+    value: number;
+    case: "amount";
+  } | {
+    /**
+     * @generated from field: string tag = 3;
+     */
+    value: string;
+    case: "tag";
+  } | { case: undefined; value?: undefined } = { case: undefined };
 
   constructor(data?: PartialMessage<SDKCall>) {
     super();
@@ -130,7 +142,8 @@ export class SDKCall extends Message<SDKCall> {
   static readonly typeName = "event.v1.SDKCall";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "sdkCallType", kind: "enum", T: proto3.getEnumType(SDKCallType) },
-    { no: 2, name: "debitAmount", kind: "scalar", T: 2 /* ScalarType.FLOAT */ },
+    { no: 2, name: "amount", kind: "scalar", T: 2 /* ScalarType.FLOAT */, oneof: "debit" },
+    { no: 3, name: "tag", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "debit" },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SDKCall {
