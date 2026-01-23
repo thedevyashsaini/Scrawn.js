@@ -114,7 +114,7 @@ export class StreamRequestBuilder<
       log.debug(`Headers: ${JSON.stringify(this.headers)}`);
 
       // The actual client-streaming gRPC call
-      const response = await (this.client[this.methodName] as any)(
+      const response = await (this.client[this.methodName])(
         iterable,
         { headers: this.headers }
       );
