@@ -25,6 +25,7 @@ import type { Transport } from '@connectrpc/connect';
 import type { ServiceType } from '@bufbuild/protobuf';
 import { createConnectTransport } from '@connectrpc/connect-node';
 import { RequestBuilder } from './requestBuilder.js';
+import { StreamRequestBuilder } from './streamRequestBuilder.js';
 import { ScrawnLogger } from '../../utils/logger.js';
 import type { ServiceMethodNames } from './types.js';
 import { ScrawnConfig } from '../../config.js';
@@ -147,7 +148,7 @@ export class GrpcClient {
     return this.baseURL;
   }
 
-  /**
+/**
    * Get the underlying transport (for advanced use cases).
    * 
    * @returns The Connect transport instance
@@ -155,5 +156,39 @@ export class GrpcClient {
    */
   getTransport(): Transport {
     return this.transport;
+  }
+
+  /**
+   * Create a new stream request builder for a client-streaming service method.
+   * 
+   * This is the entry point for making client-streaming gRPC calls. The method is fully type-safe:
+   * - Service parameter must be a valid gRPC service
+   * - Method name must exist on the service (autocomplete provided)
+   * - Payload type is inferred from the method
+   * - Response type is inferred from the method
+   * 
+   * @template S - The gRPC service type (auto-inferred)
+   * @template M - The method name (auto-inferred and validated)
+   * 
+   * @param service - The gRPC service definition (e.g., EventService)
+   * @param method - The method name as a string literal (e.g., 'streamEvents')
+   * @returns A new StreamRequestBuilder for chaining headers and streaming payloads
+   * 
+   * @example
+   * ```typescript
+   * // EventService.streamEvents (client-streaming)
+   * const response = await client
+   *   .newStreamCall(EventService, 'streamEvents')
+   *   .addHeader('Authorization', `Bearer ${apiKey}`)
+   *   .stream(asyncIterableOfEvents);
+   * // Response type is StreamEventResponse
+   * ```
+   */
+  newStreamCall<S extends ServiceType, M extends ServiceMethodNames<S>>(
+    service: S,
+    method: M
+  ): StreamRequestBuilder<S, M> {
+    log.debug(`Creating new stream request builder for ${service.typeName}.${String(method)}`);
+    return new StreamRequestBuilder<S, M>(this.transport, service, method);
   }
 }

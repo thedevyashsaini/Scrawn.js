@@ -4,16 +4,19 @@ import type {
   MiddlewareRequest, 
   MiddlewareResponse, 
   MiddlewareNext,
-  MiddlewareEventConfig 
+  MiddlewareEventConfig,
+  AITokenUsagePayload
 } from './types/event.js';
 import type { AuthRegistry, AuthMethodName, AllCredentials } from './types/auth.js';
 import { ApiKeyAuth } from './auth/apiKeyAuth.js';
 import { ScrawnLogger } from '../utils/logger.js';
 import { matchPath } from '../utils/pathMatcher.js';
-import { EventPayloadSchema } from './types/event.js';
+import { forkAsyncIterable } from '../utils/forkAsyncIterable.js';
+import { EventPayloadSchema, AITokenUsagePayloadSchema } from './types/event.js';
 import { GrpcClient } from './grpc/index.js';
 import { EventService } from '../gen/event/v1/event_connect.js';
-import { EventType, SDKCallType, SDKCall } from '../gen/event/v1/event_pb.js';
+import { EventType, SDKCallType, SDKCall, AITokenUsage } from '../gen/event/v1/event_pb.js';
+import type { StreamEventResponse } from '../gen/event/v1/event_pb.js';
 import { PaymentService } from '../gen/payment/v1/payment_connect.js';
 import { 
   ScrawnConfigError, 
@@ -426,6 +429,227 @@ export class Scrawn {
       throw convertGrpcError(error);
     }
 
-    if (auth.postRun) await auth.postRun();
+if (auth.postRun) await auth.postRun();
+  }
+
+  /**
+   * Configuration options for aiTokenStreamConsumer.
+   */
+  // Overload signatures for aiTokenStreamConsumer
+
+  /**
+   * Stream AI token usage events to the Scrawn backend (fire-and-forget mode).
+   * 
+   * Consumes an async iterable of AI token usage payloads and streams them
+   * to the backend for billing tracking. This is designed for real-time
+   * AI token tracking where usage is reported as tokens are consumed.
+   * 
+   * @param stream - An async iterable of AI token usage payloads
+   * @returns A promise that resolves to the stream response containing processed event count
+   * @throws Error if authentication fails or the gRPC stream fails
+   */
+  async aiTokenStreamConsumer(
+    stream: AsyncIterable<AITokenUsagePayload>
+  ): Promise<StreamEventResponse>;
+
+  /**
+   * Stream AI token usage events to the Scrawn backend (fire-and-forget mode).
+   * 
+   * @param stream - An async iterable of AI token usage payloads
+   * @param config - Configuration with return: false (or omitted)
+   * @returns A promise that resolves to the stream response containing processed event count
+   */
+  async aiTokenStreamConsumer(
+    stream: AsyncIterable<AITokenUsagePayload>,
+    config: { return?: false }
+  ): Promise<StreamEventResponse>;
+
+  /**
+   * Stream AI token usage events to the Scrawn backend while returning a forked stream.
+   * 
+   * When `return: true`, the input stream is forked: one fork is sent to the billing
+   * backend (non-blocking), and the other fork is returned to the caller for streaming
+   * to the user. This enables simultaneous billing and user-facing token streaming.
+   * 
+   * @param stream - An async iterable of AI token usage payloads
+   * @param config - Configuration with return: true
+   * @returns Object containing the response promise and a forked stream for user consumption
+   * 
+   * @example
+   * ```typescript
+   * const { response, stream: userStream } = await scrawn.aiTokenStreamConsumer(
+   *   tokenGenerator(),
+   *   { return: true }
+   * );
+   * 
+   * // Stream tokens to user while billing happens in background
+   * for await (const token of userStream) {
+   *   process.stdout.write(token.outputTokens.toString());
+   * }
+   * 
+   * // Billing completes after stream is consumed
+   * const result = await response;
+   * console.log(`Billed ${result.eventsProcessed} events`);
+   * ```
+   */
+  async aiTokenStreamConsumer(
+    stream: AsyncIterable<AITokenUsagePayload>,
+    config: { return: true }
+  ): Promise<{ response: Promise<StreamEventResponse>; stream: AsyncIterable<AITokenUsagePayload> }>;
+
+  /**
+   * Stream AI token usage events to the Scrawn backend.
+   * 
+   * Consumes an async iterable of AI token usage payloads and streams them
+   * to the backend for billing tracking. This is designed for real-time
+   * AI token tracking where usage is reported as tokens are consumed.
+   * 
+   * The streaming is non-blocking: the iterable is consumed in the background
+   * and streamed to the server without blocking the caller's code path.
+   * 
+   * When `return: true`, the stream is forked internally - one fork goes to
+   * billing (non-blocking), and another is returned to the caller for streaming
+   * to the user.
+   * 
+   * @param stream - An async iterable of AI token usage payloads
+   * @param config - Optional configuration object
+   * @param config.return - If true, returns a forked stream alongside the response promise
+   * @returns Depends on config.return:
+   *   - false/undefined: Promise<StreamEventResponse>
+   *   - true: { response: Promise<StreamEventResponse>, stream: AsyncIterable<AITokenUsagePayload> }
+   * @throws Error if authentication fails or the gRPC stream fails
+   * 
+   * @example
+   * ```typescript
+   * // Fire-and-forget mode (default)
+   * async function* tokenUsageStream() {
+   *   yield {
+   *     userId: 'user_abc123',
+   *     model: 'gpt-4',
+   *     inputTokens: 100,
+   *     outputTokens: 50,
+   *     inputDebit: { amount: 0.003 },
+   *     outputDebit: { amount: 0.006 }
+   *   };
+   * }
+   * 
+   * const response = await scrawn.aiTokenStreamConsumer(tokenUsageStream());
+   * console.log(`Processed ${response.eventsProcessed} events`);
+   * 
+   * // Return mode - stream to user while billing
+   * const { response, stream } = await scrawn.aiTokenStreamConsumer(
+   *   tokenUsageStream(),
+   *   { return: true }
+   * );
+   * 
+   * for await (const token of stream) {
+   *   // Stream to user
+   * }
+   * 
+   * const result = await response;
+   * ```
+   */
+  async aiTokenStreamConsumer(
+    stream: AsyncIterable<AITokenUsagePayload>,
+    config?: { return?: boolean }
+  ): Promise<StreamEventResponse | { response: Promise<StreamEventResponse>; stream: AsyncIterable<AITokenUsagePayload> }> {
+    // Get credentials for authentication
+    const creds = await this.getCredsFor('api');
+
+    // If return mode, fork the stream
+    if (config?.return === true) {
+      const [billingStream, userStream] = forkAsyncIterable(stream);
+      
+      // Transform billing stream and send to backend (non-blocking)
+      const transformedStream = this.transformAITokenStream(billingStream);
+      
+      const responsePromise = (async (): Promise<StreamEventResponse> => {
+        try {
+          log.info('Starting AI token usage stream (return mode)');
+
+          const response = await this.grpcClient
+            .newStreamCall(EventService, 'streamEvents')
+            .addHeader('Authorization', `Bearer ${creds.apiKey}`)
+            .stream(transformedStream);
+
+          log.info(`AI token stream completed: ${response.eventsProcessed} events processed`);
+          return response;
+        } catch (error) {
+          log.error(`Failed to stream AI token usage: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          throw convertGrpcError(error);
+        }
+      })();
+
+      return { response: responsePromise, stream: userStream };
+    }
+
+    // Default: fire-and-forget mode
+    const transformedStream = this.transformAITokenStream(stream);
+
+    try {
+      log.info('Starting AI token usage stream');
+
+      const response = await this.grpcClient
+        .newStreamCall(EventService, 'streamEvents')
+        .addHeader('Authorization', `Bearer ${creds.apiKey}`)
+        .stream(transformedStream);
+
+      log.info(`AI token stream completed: ${response.eventsProcessed} events processed`);
+      return response;
+    } catch (error) {
+      log.error(`Failed to stream AI token usage: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw convertGrpcError(error);
+    }
+  }
+
+  /**
+   * Transform user-provided AI token usage payloads into StreamEventRequest format.
+   * 
+   * Validates each payload and maps it to the gRPC request format.
+   * Invalid payloads are logged and skipped.
+   * 
+   * @param stream - The user's async iterable of AITokenUsagePayload
+   * @returns An async iterable of StreamEventRequest payloads
+   * @internal
+   */
+  private async *transformAITokenStream(
+    stream: AsyncIterable<AITokenUsagePayload>
+  ) {
+    for await (const payload of stream) {
+      // Validate each payload
+      const validationResult = AITokenUsagePayloadSchema.safeParse(payload);
+      if (!validationResult.success) {
+        const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+        log.error(`Invalid AI token usage payload, skipping: ${errors}`);
+        continue;
+      }
+
+      const validated = validationResult.data;
+
+      // Build input debit field
+      const inputDebit = validated.inputDebit.amount !== undefined
+        ? { case: 'inputAmount' as const, value: validated.inputDebit.amount }
+        : { case: 'inputTag' as const, value: validated.inputDebit.tag! };
+
+      // Build output debit field
+      const outputDebit = validated.outputDebit.amount !== undefined
+        ? { case: 'outputAmount' as const, value: validated.outputDebit.amount }
+        : { case: 'outputTag' as const, value: validated.outputDebit.tag! };
+
+      yield {
+        type: EventType.AI_TOKEN_USAGE,
+        userId: validated.userId,
+        data: {
+          case: 'aiTokenUsage' as const,
+          value: new AITokenUsage({
+            model: validated.model,
+            inputTokens: validated.inputTokens,
+            outputTokens: validated.outputTokens,
+            inputDebit,
+            outputDebit,
+          }),
+        },
+      };
+    }
   }
 }

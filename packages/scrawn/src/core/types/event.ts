@@ -160,3 +160,77 @@ export interface MiddlewareEventConfig {
     /** Optional patterns to exclude (exact match or wildcards: * for single segment, ** for multi-segment). Only applies to endpoints not in whitelist. */
     blacklist?: string[];
 }
+
+/**
+ * Debit field schema for AI token usage.
+ * 
+ * Represents either a direct amount or a named price tag for billing.
+ * Exactly one of amount or tag must be provided.
+ */
+const DebitFieldSchema = z.object({
+    amount: z.number().nonnegative('amount must be non-negative').optional(),
+    tag: z.string().min(1, 'tag must be a non-empty string').optional(),
+}).refine(
+    (data) => (data.amount !== undefined) !== (data.tag !== undefined),
+    { message: 'Exactly one of amount or tag must be provided' }
+);
+
+/**
+ * Zod schema for AI token usage payload validation.
+ * 
+ * Used by aiTokenStreamConsumer to validate each token usage event.
+ * 
+ * Validates:
+ * - userId: non-empty string
+ * - model: non-empty string (e.g., 'gpt-4', 'claude-3')
+ * - inputTokens: non-negative integer
+ * - outputTokens: non-negative integer
+ * - inputDebit: either amount (number) OR tag (string), but not both
+ * - outputDebit: either amount (number) OR tag (string), but not both
+ */
+export const AITokenUsagePayloadSchema = z.object({
+    userId: z.string().min(1, 'userId must be a non-empty string'),
+    model: z.string().min(1, 'model must be a non-empty string'),
+    inputTokens: z.number().int('inputTokens must be an integer').nonnegative('inputTokens must be non-negative'),
+    outputTokens: z.number().int('outputTokens must be an integer').nonnegative('outputTokens must be non-negative'),
+    inputDebit: DebitFieldSchema,
+    outputDebit: DebitFieldSchema,
+});
+
+/**
+ * Payload structure for AI token usage tracking.
+ * 
+ * Used by aiTokenStreamConsumer to track AI model token consumption.
+ * Each payload represents a single usage event (e.g., one chunk or one request).
+ * 
+ * @property userId - The user ID associated with this token usage
+ * @property model - The AI model identifier (e.g., 'gpt-4', 'claude-3-opus')
+ * @property inputTokens - Number of input/prompt tokens consumed
+ * @property outputTokens - Number of output/completion tokens consumed
+ * @property inputDebit - Billing info for input tokens (amount or tag)
+ * @property outputDebit - Billing info for output tokens (amount or tag)
+ * 
+ * @example
+ * ```typescript
+ * // Using direct amounts
+ * const payload1: AITokenUsagePayload = {
+ *   userId: 'u123',
+ *   model: 'gpt-4',
+ *   inputTokens: 100,
+ *   outputTokens: 50,
+ *   inputDebit: { amount: 0.003 },
+ *   outputDebit: { amount: 0.006 }
+ * };
+ * 
+ * // Using price tags
+ * const payload2: AITokenUsagePayload = {
+ *   userId: 'u123',
+ *   model: 'claude-3-opus',
+ *   inputTokens: 200,
+ *   outputTokens: 100,
+ *   inputDebit: { tag: 'CLAUDE_INPUT' },
+ *   outputDebit: { tag: 'CLAUDE_OUTPUT' }
+ * };
+ * ```
+ */
+export type AITokenUsagePayload = z.infer<typeof AITokenUsagePayloadSchema>;

@@ -9,6 +9,7 @@
 
 export { GrpcClient } from './client.js';
 export { RequestBuilder } from './requestBuilder.js';
+export { StreamRequestBuilder } from './streamRequestBuilder.js';
 export type {
   ServiceMethodNames,
   MethodInput,
