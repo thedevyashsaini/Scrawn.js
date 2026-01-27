@@ -16,7 +16,9 @@
     "gen": "cd proto && bunx buf generate",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "proto:pull": "git submodule update --remote --merge proto",
+    "proto:push": "cd proto && git add . && git commit -s -m \"$1\" && git push && cd .."
   },
   "dependencies": {
     "@bufbuild/protobuf": "1.7.2",
