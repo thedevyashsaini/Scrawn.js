@@ -1,0 +1,3 @@
+[submodule "packages/scrawn/proto"]
+	path = packages/scrawn/proto
+	url = https://github.com/ScrawnDotDev/.proto
