@@ -68,3 +68,50 @@ export interface Headers {
 export interface RequestState {
   hasPayload: boolean;
 }
+
+/**
+ * Represents the kind of a gRPC method.
+ * Connect RPC method info includes `kind` with these values.
+ */
+export type MethodKind = 'unary' | 'server_streaming' | 'client_streaming' | 'bidi_streaming';
+
+/**
+ * Extract methods of a specific kind from a service.
+ * 
+ * @template S - The gRPC service type
+ * @template K - The method kind to filter by
+ */
+export type MethodsOfKind<
+  S extends ServiceType,
+  K extends MethodKind
+> = {
+  [M in keyof S['methods'] & string]: S['methods'][M] extends { kind: infer MK }
+    ? MK extends K
+      ? M
+      : never
+    : never;
+}[keyof S['methods'] & string];
+
+/**
+ * Extract unary method names from a service.
+ * Unary methods accept a single request and return a single response.
+ */
+export type UnaryMethodNames<S extends ServiceType> = MethodsOfKind<S, 'unary'>;
+
+/**
+ * Extract client-streaming method names from a service.
+ * Client-streaming methods accept a stream of requests and return a single response.
+ */
+export type ClientStreamingMethodNames<S extends ServiceType> = MethodsOfKind<S, 'client_streaming'>;
+
+/**
+ * Extract server-streaming method names from a service.
+ * Server-streaming methods accept a single request and return a stream of responses.
+ */
+export type ServerStreamingMethodNames<S extends ServiceType> = MethodsOfKind<S, 'server_streaming'>;
+
+/**
+ * Extract bidirectional-streaming method names from a service.
+ * Bidi-streaming methods accept a stream of requests and return a stream of responses.
+ */
+export type BidiStreamingMethodNames<S extends ServiceType> = MethodsOfKind<S, 'bidi_streaming'>;
