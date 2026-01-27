@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RequestBuilder } from "../../../src/core/grpc/requestBuilder.js";
+import { GrpcCallContext } from "../../../src/core/grpc/callContext.js";
 import { createMockTransport } from "../../mocks/mockTransport.js";
 import { PaymentService } from "../../../src/gen/payment/v1/payment_connect.js";
 import { CreateCheckoutLinkResponse } from "../../../src/gen/payment/v1/payment_pb.js";
@@ -16,7 +17,13 @@ describe("RequestBuilder", () => {
       },
     });
 
-    const builder = new RequestBuilder(transport, PaymentService, "createCheckoutLink");
+    const ctx = new GrpcCallContext(
+      transport,
+      PaymentService,
+      "createCheckoutLink",
+      "RequestBuilder"
+    );
+    const builder = new RequestBuilder(ctx);
     const response = await builder
       .addHeader("Authorization", "Bearer token")
       .addPayload({ userId: "user_1" })
@@ -30,7 +37,13 @@ describe("RequestBuilder", () => {
       unary: () => new CreateCheckoutLinkResponse({ checkoutLink: "" }),
     });
 
-    const builder = new RequestBuilder(transport, PaymentService, "createCheckoutLink");
+    const ctx = new GrpcCallContext(
+      transport,
+      PaymentService,
+      "createCheckoutLink",
+      "RequestBuilder"
+    );
+    const builder = new RequestBuilder(ctx);
     await expect(builder.request()).rejects.toThrow("addPayload");
   });
 
@@ -39,7 +52,13 @@ describe("RequestBuilder", () => {
       unary: () => new CreateCheckoutLinkResponse({ checkoutLink: "" }),
     });
 
-    const builder = new RequestBuilder(transport, PaymentService, "createCheckoutLink");
+    const ctx = new GrpcCallContext(
+      transport,
+      PaymentService,
+      "createCheckoutLink",
+      "RequestBuilder"
+    );
+    const builder = new RequestBuilder(ctx);
     builder.addPayload({ userId: "user_1" });
 
     expect(() => builder.addPayload({ userId: "user_2" })).toThrow(
