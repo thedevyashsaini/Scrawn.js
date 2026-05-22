@@ -2,6 +2,8 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "moduleResolution": "NodeNext",
     "types": ["node"],
     "strict": true,
@@ -10,10 +12,11 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "outDir": "./dist",
-    "baseUrl": ".",
     "paths": {
-      "@scrawn/core": ["../packages/scrawn/src/index.ts"]
-    }
+      "@scrawn/core": ["../packages/scrawn/src/index.ts"],
+      "@scrawn/analytics": ["../packages/analytics/src/index.ts"]
+    },
+    "rootDir": "../"
   },
   "include": ["./*.ts"],
   "exclude": ["node_modules", "dist"]

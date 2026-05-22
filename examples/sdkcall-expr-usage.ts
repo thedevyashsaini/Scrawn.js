@@ -1,33 +1,25 @@
-import { Scrawn, add, mul, tag } from "@scrawn/core";
+import { mul, add } from "@scrawn/core";
+import { biller } from "./scrawn/biller.ts";
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
 async function main() {
-  const scrawn = new Scrawn({
-    apiKey: (process.env.SCRAWN_KEY || "") as `scrn_${string}`,
-    baseURL: process.env.SCRAWN_BASE_URL || "http://localhost:8069",
+  await biller.sdkCallEventConsumer({
+    userId: "c0971bcb-b901-4c3e-a191-c9a97871c39f",
+    debitExpr: biller.expr(mul(biller.tag("PREMIUM_CALL"), 3)),
   });
 
-  await scrawn.sdkCallEventConsumer(
-    {
-      userId: "c0971bcb-b901-4c3e-a191-c9a97871c39f",
-      debitExpr: tag("PREMIUM_FEATURE"),
-    }
-  );
+  await biller.sdkCallEventConsumer({
+    userId: "c0971bcb-b901-4c3e-a191-c9a97871c39f",
+    debitExpr: biller.expr(mul(biller.tag("EXTRA_FEE"), 3)),
+  });
 
-  await scrawn.sdkCallEventConsumer(
-    {
-      userId: "c0971bcb-b901-4c3e-a191-c9a97871c39f",
-      debitExpr: mul(tag("PER_CALL"), 3),
-    }
-  );
-
-  await scrawn.sdkCallEventConsumer(
-    {
-      userId: "c0971bcb-b901-4c3e-a191-c9a97871c39f",
-      debitExpr: add(mul(tag("BASE_RATE"), 5), tag("SURCHARGE"), 100),
-    }
-  );
+  await biller.sdkCallEventConsumer({
+    userId: "c0971bcb-b901-4c3e-a191-c9a97871c39f",
+    debitExpr: biller.expr(
+      add(biller.expr("COMPLEX_FEE"), mul(biller.tag("PREMIUM_CALL"), 5))
+    ),
+  });
 
   console.log("SDK call expression events consumed successfully");
 }

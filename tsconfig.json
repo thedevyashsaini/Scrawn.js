@@ -3,8 +3,8 @@
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "declaration": true,
-    "declarationMap": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": ".",
@@ -15,6 +15,7 @@
     "resolveJsonModule": true,
     "paths": {
       "@scrawn/core": ["./packages/scrawn/src/index.ts"],
+      "@scrawn/analytics": ["./packages/analytics/src/index.ts"],
       "@scrawn/sdk_call": ["./packages/@scrawn/sdk_call/src/index.ts"]
     }
   },

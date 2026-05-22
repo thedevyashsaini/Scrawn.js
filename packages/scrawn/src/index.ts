@@ -21,6 +21,11 @@ export * from "./gen/auth/v1/auth_grpc_pb.js";
 export * from "./gen/auth/v1/auth_pb.js";
 export * from "./gen/payment/v1/payment_grpc_pb.js";
 export * from "./gen/payment/v1/payment_pb.js";
+export * from "./gen/query/v1/query_grpc_pb.js";
+export * from "./gen/query/v1/query_pb.js";
+export { DataQueryServiceClient } from "./gen/data/v1/data_grpc_pb.js";
+export { OrderBy, QueryRequest, QueryResponse, Row } from "./gen/data/v1/data_pb.js";
 
 // Export central configuration
-export { ScrawnConfig } from "./config.js";
+export { ScrawnConfig, scrawnConfig } from "./config.js";
+export type { ScrawnCLIConfig } from "./config.js";
